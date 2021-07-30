@@ -1,0 +1,211 @@
+---
+title: "Análisis Base de Datos: Animé"
+output: html_document
+---
+
+
+
+```{r include=FALSE}
+options(scipen = 999)
+
+library(ggplot2)
+library(dplyr)
+library(psych)
+
+library(readr)
+series <- read.csv("C:/Users/Desktop/anime/series.csv",encoding = "UTF-8")
+
+```
+
+
+# Generacion Base de Datos:
+
+Se realiza un trabajo de Webscrapping, para lo cual se ocupan las funciones FOR, IF ELSE para iterar sobre cada pagina web y obtener los datos. El loop FOR recorrerá cada página web para almacenar los datos, mientras que se le consultará con un IF en caso de que el link de la pagina sea nulo, si es nulo entonces detiene el loop, mientras que si no lo es, continua extrayendo datos.  Se ocupa la libreria rvest para realizar la extracción de datos y se almacenan finalmente los datos en el disco duro. 
+
+
+```{r, eval=F, echo=T}
+series <- data.frame(Titulo=character(),
+                     Tipo=character(),
+                     Estado=character(), 
+                     Cantidad_episodio=numeric(), 
+                     Visitas=numeric())
+library(rvest)
+
+for (i in 1:43) {
+
+  if (i ==  0){
+    break
+    
+  }else{
+    
+  
+  print(paste("Generando Links de la pagina N°: ", i))
+  
+  Jkanime<-read_html(paste0("https://www.animefenix.com/animes?page=",i))
+  
+  links_series <- Jkanime %>% 
+    html_nodes(".serie-card") %>% 
+    html_nodes("a") %>% 
+    html_attr("href") %>%
+    unique()
+  
+  for (i in links_series) {
+    
+    print(paste("Almacenando Serie: ",i ))
+    
+    link_tr = as.character(i)
+    infoserie<-read_html(link_tr)
+    
+    title <- infoserie %>% 
+      html_node("h1") %>% 
+      html_text()
+    
+    tipo <- infoserie %>% 
+      html_nodes(".has-text-light") %>% 
+      html_nodes("li") %>% 
+      html_text()
+    
+    Tipo = gsub(pattern="Tipo: ", replacement = '', tipo[1])
+    Estado = gsub(pattern="Estado: ", replacement = '', tipo[2])
+    Cantidad_episodios = as.numeric(gsub(pattern="Episodios: ", replacement = '', tipo[3]))
+    Visitas = as.numeric(gsub(pattern="Visitas: ", replacement = '', tipo[4]))
+    
+    vector <- c(title,Tipo,Estado,Cantidad_episodios,Visitas)
+    
+    series[nrow(series)+1,] <- c(vector)
+    
+  }
+  
+  }
+}
+
+
+```
+
+
+# Estadística Descriptiva
+
+Dentro de las carácterisicas de los datos recuperados de la página web, se pudo obtener 1.071 observaciones de las cuales cada una corresponde a Series, Peliculas, etc. En promedio cada serie tiene una cantidad de 15 episodios, mientras que el promedio de visitas por serie/pelicula es de 93.494 visitas. La serie/pelicula más vista tiene 4.115.087 visitas, mientras que la que tiene menos cantidad de visitas solamente tiene 688. 
+
+
+```{r message=FALSE, warning=FALSE}
+library(psych)
+describe(series,fast = TRUE)
+```
+
+
+
+
+
+# Cantidad de Series según Estado
+
+Nos interesa el estado de cada serie, si se encuentran finalizadas o se encuentran actualmente en emisión. Podemos ver que la gran parte de las series que tiene la plataforma se encuentran finalizadas, con 1019 series. Por otra parte, tenemos 51 series que se encuentran actualmente en emisión.
+
+
+```{r echo=FALSE}
+ggplot(series,aes(x = Estado,fill = Estado)) + 
+  geom_bar() + 
+  ggtitle("Cantidad de Series según Estado")+
+  theme_light() + 
+stat_count(geom = "text", colour = "white", size = 2.5,
+aes(label = ..count..),position=position_stack(vjust=0.5))
+
+```
+
+# Cantidad de Series según caracter audiovisual
+
+En este apartado nos interesa saber la cantidad de series según registro audiovisual. Se puede ver que 847 observaciones corresponden a series de Televesión, 115 corresponden a peliculas, 75 corresponden a OVA,y finalmente 34 son considerados como especiales. Esto nos indica que predominan principalmente series de televisión dentro del catálogo de la página web. 
+
+
+```{r echo=FALSE}
+ggplot(series,aes(x = Tipo,fill = Tipo)) + 
+  geom_bar() + 
+  theme_light() + 
+  ggtitle("Cantidad de Series según caracter audiovisual") + 
+  stat_count(geom = "text", colour = "white", size = 2.5,
+aes(label = ..count..),position=position_stack(vjust=0.5))
+```
+
+
+# Cantidad Visitas según caracter audiovisual
+
+Nos interesa estudiar la cantidad de visitas que tienen las series según el carácter audivisual de la serie. Se puede ver que las peliculas, los ova , y  los especiales se cocentran en la parte izquierda de la cola, por lo cual, serían las que tienen menor cantidad de visitas.  Por otra parte, se puede ver que las que tienen mayor cantidad de visitas corresponden a series. 
+
+
+```{r echo=FALSE, message=FALSE, warning=FALSE}
+
+series %>%
+  ggplot(aes(x=as.numeric(Visitas), fill = Tipo)) + 
+  geom_histogram(bins = 15) +
+  theme_light() + 
+  ggtitle("Cantidad Visitas según caracter audiovisual") + 
+  xlim(c(0,1000000)) + 
+  xlab("Cantidad de Visitas")
+```
+
+Dentro de las series más vistas, se puede ver que Shingeki no Kyojin es la serie más vista, con 4 millones de visitas, seguido de One Piece con un 3.900.000 vistas.  
+
+```{r}
+series %>%arrange(Visitas) %>%  top_n(10) %>%  
+  ggplot(aes(x=reorder(Titulo, Visitas), y = Visitas)) + 
+  geom_bar(stat = "identity") +
+  theme_light() + 
+  ggtitle("Series más Vistas de la Platavorma") + 
+  xlab("Nombre Serie") + 
+  xlab("Cantidad de Visitas") + 
+  coord_flip()
+
+```
+
+
+# Cantidad de Episodios
+
+Para cada serie, lo normal es que cuenten con un total de 12 episodios, que es la frecuencia que más se repite en la cantidad de episodios. Se puede mencionar tambien que existe una concentración en las series que tienen 24 episodios, y que además hay series que tienen bastante mayor cantidad de episodios. 
+
+```{r fig1, fig.height = 8, fig.width = 15}
+
+
+ggplot(series,aes(x=as.factor(as.numeric(Cantidad_episodio)))) + 
+  geom_bar(fill = "darkblue") + 
+  ggtitle("Distribución de Cantidad de Episodios")  + 
+  theme_light() + 
+  xlab("Cantidad de Episodios")
+
+
+```
+
+
+Dentro de las series que tienen mayor cantidad de episodios podemos ver a One Piece con aproximadamente 1000 capitulos, y seguido de Naruto Shipuden con aproximadamente la mitad de capitulos. 
+
+```{r}
+
+series %>%arrange(Cantidad_episodio) %>%  top_n(10) %>%  
+  ggplot(aes(x=reorder(Titulo, Cantidad_episodio), y = Cantidad_episodio)) + 
+  geom_bar(stat = "identity") +
+  theme_light() + 
+  ggtitle("Series con más cantidad de episodios de la Plataforma") + 
+  xlab("Nombre Serie") + 
+  xlab("Cantidad de Visitas") + 
+  coord_flip()
+
+```
+
+
+
+# Regresión Lineal
+
+Por último se busca estudiar un modelo de regresión lineal para explicar la cantidad de visitas de cada animé. Para esto formulamos el logaritmo de la cantidad de visitas como variable dependiente, y que las variables dependientes sean la cantidad de episodios que tiene, el tipo y el estado de la serie. 
+
+Dentro de los principales resultados, podemos ver que los parámetros que son significativos son la cantidad de episodios, Tipo TV, y Estado Finalizado. La interpretación de estos parámetros es que la cantidad de visitas aumentarán en un 0.06% ante un aumento unitario en los capitulos, y que las series de televisión tienen un 79% más de visitas que los especiales de televisión.
+
+Por último, podemos ver que las series que ya se encuentran finalizadas tienen un 49% menos de visitas que las series que se encuentran en emisión actualmente. Hay que recalcar que ninguno de estos efectos puede ser considerado causal, dado que probablemente existen variables omitidas. Más que un efecto causal deben ser interpretados como correlaciones.
+
+
+```{r echo=FALSE}
+
+modelo <- lm(series, formula = log(Visitas) ~ Cantidad_episodio + Tipo + Estado )
+
+summary(modelo)
+
+```
+
